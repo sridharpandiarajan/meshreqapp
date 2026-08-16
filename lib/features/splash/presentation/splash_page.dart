@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/services/device_identity_service.dart';
 import '../../../core/theme/app_color.dart';
 import '../../../core/theme/bevel.dart';
-import '../../permissions/presentation/permission_page.dart';
+import '../../auth/presentation/auth_gate.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -48,9 +48,9 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 700),
-        pageBuilder: (_, animation, __) => FadeTransition(
+        pageBuilder: (_, animation, _) => FadeTransition(
           opacity: animation,
-          child: const PermissionPage(),
+          child: const AuthGate(),
         ),
       ),
     );
@@ -180,7 +180,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                                     alignment: Alignment.topCenter,
                                     children: [
                                       ...previousChildren,
-                                      if (currentChild != null) currentChild,
+                                      ?currentChild,
                                     ],
                                   );
                                 },

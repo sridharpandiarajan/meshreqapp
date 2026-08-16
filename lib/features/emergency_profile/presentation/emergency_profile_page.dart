@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import '../../../core/services/firebase_auth_service.dart';
 import '../../../core/theme/app_color.dart';
 import '../../../core/theme/bevel.dart';
 import '../../home/presentation/home_page.dart';
@@ -23,6 +24,40 @@ class _EmergencyProfilePageState extends State<EmergencyProfilePage> {
   final List<String> _bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
+
+  void _loadInitialData() {
+    if (Hive.isBoxOpen('emergency_profile_box')) {
+      final box = Hive.box('emergency_profile_box');
+      final savedName = box.get('full_name') as String?;
+      final savedPhone = box.get('phone') as String?;
+      final savedBlood = box.get('blood_group') as String?;
+      final savedNotes = box.get('medical_notes') as String?;
+      final savedIce = box.get('ice_contact') as String?;
+
+      if (savedName != null && savedName.isNotEmpty) {
+        _nameController.text = savedName;
+      } else if (FirebaseAuthService.currentUserDisplayName.isNotEmpty) {
+        _nameController.text = FirebaseAuthService.currentUserDisplayName;
+      }
+
+      if (savedPhone != null && savedPhone.isNotEmpty) {
+        _phoneController.text = savedPhone;
+      }
+      if (savedBlood != null && _bloodGroups.contains(savedBlood)) {
+        _selectedBloodGroup = savedBlood;
+      }
+      if (savedNotes != null) _medicalInfoController.text = savedNotes;
+      if (savedIce != null) _iceContactController.text = savedIce;
+    } else if (FirebaseAuthService.currentUserDisplayName.isNotEmpty) {
+      _nameController.text = FirebaseAuthService.currentUserDisplayName;
+    }
+  }
 
   @override
   void dispose() {

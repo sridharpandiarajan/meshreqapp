@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "891818127385",
+    "project_id": "meshresq-925fb",
+    "storage_bucket": "meshresq-925fb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:891818127385:android:c33ac3b4fc7ecc1c923a88",
+        "android_client_info": {
+          "package_name": "com.meshresq.meshresq"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "891818127385-ov3i82qiu1ksf3at3q83mf7nrv76umfj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsPs5s4KG-dAuv7562aSOmjckTrCV2SIE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "891818127385-ov3i82qiu1ksf3at3q83mf7nrv76umfj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

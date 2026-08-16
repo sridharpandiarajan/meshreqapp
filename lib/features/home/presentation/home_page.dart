@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/services/device_identity_service.dart';
+import '../../../core/services/mesh_api_service.dart';
 import '../../../core/theme/app_color.dart';
 import '../../../core/theme/bevel.dart';
+import '../../profile/presentation/profile_page.dart';
 
 class _EmergencyCategory {
   final String label;
@@ -49,9 +52,52 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String _selectedCategory = "Medical";
   bool _profileLoadFailed = false;
 
+  late final TextEditingController _sitrepTextController;
+  bool _isRecordingVoice = false;
+  bool _hasVoiceRecording = false;
+  int _voiceDurationSeconds = 0;
+
+  static const Map<String, String> _defaultVoiceNotes = {
+    "Medical": "காலில் பலத்த எலும்பு முறிவு மற்றும் ரத்தம் கசிகிறது, எங்களால் நடக்க முடியவில்லை!",
+    "Trapped / Lost": "அடர்ந்த காட்டில் பாதை தெரியவில்லை, நீர் ஆதாரம் குறைவு, உடனடியாக ஜிபிஎஸ் உதவி தேவை!",
+    "Fire / Disaster": "காட்டுத் தீ வேகமாக பரவுகிறது, கடுமையான புகை சூழ்கிறது, உடனடி மீட்பு தேவை!",
+    "Wildlife Threat": "கண்ணாடி விரியன் பாம்பு கடித்துவிட்டது, விஷம் பரவி கை வீங்கியுள்ளது, அவசர உதவி!",
+  };
+
+  void _toggleVoiceRecording() {
+    HapticFeedback.selectionClick();
+    if (_isRecordingVoice) {
+      setState(() {
+        _isRecordingVoice = false;
+        _hasVoiceRecording = true;
+        _voiceDurationSeconds = 4;
+      });
+    } else {
+      setState(() {
+        _isRecordingVoice = true;
+        _hasVoiceRecording = false;
+      });
+      // Simulate voice capture completion after 3.5 seconds
+      Future.delayed(const Duration(milliseconds: 3500), () {
+        if (mounted && _isRecordingVoice) {
+          setState(() {
+            _isRecordingVoice = false;
+            _hasVoiceRecording = true;
+            _voiceDurationSeconds = 4;
+          });
+          HapticFeedback.lightImpact();
+        }
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _sitrepTextController = TextEditingController(
+      text: _defaultVoiceNotes[_selectedCategory],
+    );
+
     _ledBlink = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -67,6 +113,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     });
 
     _loadLocalData();
+  }
+
+  @override
+  void dispose() {
+    _sitrepTextController.dispose();
+    _ledBlink.dispose();
+    _holdProgress.dispose();
+    super.dispose();
   }
 
   Future<void> _loadLocalData() async {
@@ -85,13 +139,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
   }
 
-  // --- SOS hold-to-confirm -------------------------------------------------
-  // A bare tap can't tell "I meant this" from a pocket-brush. A sustained
-  // hold -- with a visible fill ring and a haptic click on completion --
-  // keeps it fast for someone who means it, while cutting down accidental
-  // broadcasts. Aborting stays a single tap; there's no safety cost to
-  // stopping early, only to starting by mistake.
-
   void _onHoldStart(LongPressStartDetails _) {
     if (_isBroadcasting) return;
     HapticFeedback.lightImpact();
@@ -105,10 +152,55 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
   }
 
-  void _confirmBroadcast() {
+  Future<void> _confirmBroadcast() async {
     HapticFeedback.heavyImpact();
     setState(() => _isBroadcasting = true);
     _ledBlink.repeat(reverse: true);
+
+    double? lat;
+    double? lng;
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 3),
+      );
+      lat = position.latitude;
+      lng = position.longitude;
+    } catch (_) {}
+
+    final voicePayload = _sitrepTextController.text.trim().isNotEmpty
+        ? _sitrepTextController.text.trim()
+        : (_defaultVoiceNotes[_selectedCategory] ?? "அவசர உதவி தேவைப்படுகிறது!");
+
+    final res = await MeshApiService.sendEmergencyBeacon(
+      category: _selectedCategory,
+      channel: "MESH-NET",
+      latitude: lat,
+      longitude: lng,
+      voiceText: voicePayload,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.panel,
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: AppColors.olive, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                res['offline'] == true
+                    ? "SOS PACKET STORED IN OFFLINE MESH QUEUE"
+                    : "🚨 SOS TRANSMITTED LIVE TO COMMAND CENTER!",
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   void _abortBroadcast() {
@@ -117,13 +209,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _holdProgress.value = 0;
     _ledBlink.stop();
     _ledBlink.value = 0;
-  }
-
-  @override
-  void dispose() {
-    _ledBlink.dispose();
-    _holdProgress.dispose();
-    super.dispose();
   }
 
   @override
@@ -142,11 +227,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     child: Column(
                       children: [
                         _buildChannelsCard(),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 18),
                         _buildCategorySection(),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 16),
+                        _buildSitrepSection(),
+                        const SizedBox(height: 24),
                         _buildSosTrigger(),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 32),
                         _buildProfileRow(),
                       ],
                     ),
@@ -217,23 +304,32 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
           ),
           const SizedBox(width: 10),
-          Bevel(
-            radius: 8,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            child: const Column(
-              children: [
-                Icon(Icons.shield_outlined, color: AppColors.olive, size: 15),
-                SizedBox(height: 3),
-                Text(
-                  "SEC",
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
+          GestureDetector(
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfilePage()),
+              );
+              _loadLocalData();
+            },
+            child: Bevel(
+              radius: 8,
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+              child: const Column(
+                children: [
+                  Icon(Icons.person_outline, color: AppColors.olive, size: 16),
+                  SizedBox(height: 3),
+                  Text(
+                    "PROFILE",
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -299,7 +395,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               child: GestureDetector(
                 onTap: () {
                   HapticFeedback.selectionClick();
-                  setState(() => _selectedCategory = cat.label);
+                  setState(() {
+                    _selectedCategory = cat.label;
+                    _sitrepTextController.text = _defaultVoiceNotes[cat.label] ?? "";
+                  });
                 },
                 child: Bevel(
                   inset: isSelected,
@@ -332,6 +431,207 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
             );
           }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSitrepSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1. Voice Note Recording Area
+        Bevel(
+          inset: true,
+          fill: AppColors.panel,
+          radius: 8,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: _toggleVoiceRecording,
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: _isRecordingVoice
+                        ? AppColors.distress.withValues(alpha: 0.2)
+                        : (_hasVoiceRecording
+                            ? AppColors.olive.withValues(alpha: 0.2)
+                            : AppColors.panelRaised),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _isRecordingVoice
+                          ? AppColors.distress
+                          : (_hasVoiceRecording ? AppColors.olive : AppColors.hairline),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Icon(
+                    _isRecordingVoice
+                        ? Icons.stop
+                        : (_hasVoiceRecording ? Icons.play_arrow : Icons.mic),
+                    color: _isRecordingVoice
+                        ? AppColors.distress
+                        : (_hasVoiceRecording ? AppColors.olive : AppColors.amber),
+                    size: 17,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        if (_isRecordingVoice) ...[
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: AppColors.distress,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            "RECORDING VOICE SOS...",
+                            style: TextStyle(
+                              color: AppColors.distress,
+                              fontSize: 10,
+                              fontFamily: 'Courier',
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ] else if (_hasVoiceRecording) ...[
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: AppColors.olive,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            "VOICE MEMO ATTACHED (0:0${_voiceDurationSeconds}s)",
+                            style: const TextStyle(
+                              color: AppColors.olive,
+                              fontSize: 10,
+                              fontFamily: 'Courier',
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ] else ...[
+                          const Text(
+                            "RECORD EMERGENCY VOICE NOTE",
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _isRecordingVoice
+                          ? "Sampling Tamil/English speech buffer..."
+                          : (_hasVoiceRecording
+                              ? "Attached to LoRa mesh packet"
+                              : "Tap microphone to record ambient SOS"),
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 9.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_hasVoiceRecording && !_isRecordingVoice)
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _hasVoiceRecording = false;
+                      _voiceDurationSeconds = 0;
+                    });
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.all(4.0),
+                    child: Icon(Icons.close, color: AppColors.textMuted, size: 15),
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        // 2. Direct Inline Text Area
+        Bevel(
+          inset: true,
+          fill: AppColors.panel,
+          radius: 8,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "EMERGENCY SITUATION TEXT",
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 8.5,
+                      fontFamily: 'Courier',
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _sitrepTextController.text = _defaultVoiceNotes[_selectedCategory] ?? "";
+                      });
+                    },
+                    child: const Text(
+                      "RESET",
+                      style: TextStyle(
+                        color: AppColors.olive,
+                        fontSize: 8.5,
+                        fontFamily: 'Courier',
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              TextField(
+                controller: _sitrepTextController,
+                maxLines: 2,
+                minLines: 1,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 11.5,
+                  height: 1.3,
+                ),
+                decoration: const InputDecoration(
+                  hintText: "Type situation details in Tamil or English...",
+                  hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 4),
+                  border: InputBorder.none,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
