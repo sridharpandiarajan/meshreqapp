@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'core/services/device_identity_service.dart';
 import 'core/services/firebase_auth_service.dart';
+import 'core/services/dtn_bundle_storage_service.dart';
+import 'core/services/dtn_sync_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/splash/presentation/splash_page.dart';
 
@@ -9,7 +11,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DeviceIdentityService.init();
   await Hive.openBox('emergency_profile_box');
+  await DTNBundleStorageService.init();
   await FirebaseAuthService.init();
+  DTNSyncService.startPeriodicSync();
   runApp(const MeshResQApp());
 }
 

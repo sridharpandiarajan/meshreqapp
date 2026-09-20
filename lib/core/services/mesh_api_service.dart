@@ -7,6 +7,9 @@ import 'package:uuid/uuid.dart';
 import 'device_identity_service.dart';
 import 'firebase_auth_service.dart';
 
+import 'dtn_bundle_storage_service.dart';
+import 'nearby_mesh_service.dart';
+
 class MeshApiService {
   static const String _defaultUrl = "http://10.0.2.2:8000"; // Default for Android Emulator
   static const String _defaultLocalhostUrl = "http://localhost:8000"; // For Windows / Web / Host
@@ -32,7 +35,8 @@ class MeshApiService {
     }
   }
 
-  /// Sends a live Emergency SOS Beacon to the FastAPI Backend and Admin Dashboard.
+  /// Sends an SOS Beacon: stores locally in DTN buffer, attempts cloud uplink,
+  /// and relays to nearby phones over Bluetooth if offline.
   static Future<Map<String, dynamic>> sendEmergencyBeacon({
     required String category,
     required String channel,
@@ -60,8 +64,9 @@ class MeshApiService {
     final lat = latitude ?? 12.9171;
     final lng = longitude ?? 80.1921;
 
+    final incidentUuid = "SOS-${const Uuid().v4().substring(0, 8).toUpperCase()}";
     final payload = {
-      "incident_uuid": "SOS-${const Uuid().v4().substring(0, 8).toUpperCase()}",
+      "incident_uuid": incidentUuid,
       "victim_name": "$victimName (Live Mobile)",
       "phone": phone,
       "blood_group": bloodGroup,
@@ -76,36 +81,63 @@ class MeshApiService {
       "channel": channel,
       "hop_count": hopCount,
       "hop_path": [
-        {"node_id": "NODE-$deviceUuid", "type": "MOBILE_BLE_ORIGIN", "timestamp": "Now"},
-        {"node_id": "ECP-MEDAVAKKAM-01", "type": "ECP_UPLINK", "timestamp": "Now"}
+        {"node_id": "NODE-$deviceUuid", "type": "MOBILE_BLE_ORIGIN", "timestamp": DateTime.now().toIso8601String()},
       ],
       "battery_level": 82,
       "voice_transcription": voiceText ?? "காப்பாற்றுங்கள், அவசர உதவி தேவைப்படுகிறது! (Live Emergency SOS from mobile app)",
       "detected_language": "Tamil (தமிழ்)"
     };
 
-    final baseUrl = getBaseUrl();
-    debugPrint("[MeshResQ] Transmitting live SOS packet to $baseUrl/api/v1/incidents...");
+    // 1. Always persist to local DTN storage first (Zero Data Loss guarantee)
+    await DTNBundleStorageService.saveOutgoingBundle(payload);
 
-    try {
-      final response = await http.post(
-        Uri.parse("$baseUrl/api/v1/incidents"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 5));
+    // 2. Attempt direct cloud uplink
+    final uploadRes = await uploadBundle(payload);
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final data = jsonDecode(response.body);
-        debugPrint("[MeshResQ] Live beacon accepted by backend! ID: ${data['id']}");
-        return {"success": true, "data": data};
-      } else {
-        debugPrint("[MeshResQ] Backend returned status ${response.statusCode}: ${response.body}");
-        return {"success": false, "error": "Server error ${response.statusCode}"};
-      }
-    } catch (e) {
-      debugPrint("[MeshResQ] Network unreachable, bundle saved in offline DTN buffer: $e");
-      // Fallback: Store packet in offline DTN queue
-      return {"success": true, "offline": true, "message": "Saved to offline mesh buffer"};
+    if (uploadRes['success'] == true && uploadRes['offline'] != true) {
+      await DTNBundleStorageService.markAsSynced(incidentUuid);
+      return uploadRes;
     }
+
+    // 3. Fallback: Network unreachable -> Relay immediately to nearby peers via Bluetooth/Nearby
+    final peerRelayCount = await NearbyMeshService.broadcastPacket(payload);
+    debugPrint("[MeshResQ] Offline mode: Broadcasted SOS packet to $peerRelayCount nearby peer(s).");
+
+    return {
+      "success": true,
+      "offline": true,
+      "peers_relayed": peerRelayCount,
+      "incident_uuid": incidentUuid,
+      "message": peerRelayCount > 0
+          ? "Transmitted to $peerRelayCount nearby peer(s) over Bluetooth"
+          : "Saved in offline DTN buffer. Will broadcast when peers are in range.",
+      "payload": payload,
+    };
+  }
+
+  /// Uplinks a single bundle payload to the FastAPI server with fallback endpoints
+  static Future<Map<String, dynamic>> uploadBundle(Map<String, dynamic> payload) async {
+    final candidateUrls = [
+      getBaseUrl(),
+      "http://127.0.0.1:8000",
+      "http://10.0.2.2:8000",
+    ];
+
+    for (final baseUrl in candidateUrls) {
+      try {
+        final response = await http.post(
+          Uri.parse("$baseUrl/api/v1/incidents"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode(payload),
+        ).timeout(const Duration(seconds: 3));
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final data = jsonDecode(response.body);
+          return {"success": true, "data": data, "offline": false};
+        }
+      } catch (_) {}
+    }
+
+    return {"success": false, "offline": true, "error": "All candidate endpoints unreachable"};
   }
 }

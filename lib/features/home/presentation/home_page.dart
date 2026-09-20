@@ -4,6 +4,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/services/device_identity_service.dart';
 import '../../../core/services/mesh_api_service.dart';
+import '../../../core/services/dtn_bundle_storage_service.dart';
+import '../../../core/services/nearby_mesh_service.dart';
+import '../../../core/services/dtn_sync_service.dart';
 import '../../../core/theme/app_color.dart';
 import '../../../core/theme/bevel.dart';
 import '../../profile/presentation/profile_page.dart';
@@ -113,6 +116,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     });
 
     _loadLocalData();
+    NearbyMeshService.startMesh();
   }
 
   @override
@@ -181,19 +185,28 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
 
     if (!mounted) return;
+    final isOffline = res['offline'] == true;
+    final peerRelayed = res['peers_relayed'] as int? ?? 0;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: AppColors.panel,
         content: Row(
           children: [
-            const Icon(Icons.check_circle_outline, color: AppColors.olive, size: 20),
+            Icon(
+              isOffline ? (peerRelayed > 0 ? Icons.hub_rounded : Icons.inventory_2_outlined) : Icons.check_circle_outline,
+              color: isOffline ? AppColors.amber : AppColors.olive,
+              size: 20,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                res['offline'] == true
-                    ? "SOS PACKET STORED IN OFFLINE MESH QUEUE"
+                isOffline
+                    ? (peerRelayed > 0
+                        ? "🚨 OFFLINE: RELAYED TO $peerRelayed NEARBY BLUETOOTH PEER(S)!"
+                        : "🚨 OFFLINE: BUFFERED IN DTN MULE STORAGE (WAITING FOR PEERS)")
                     : "🚨 SOS TRANSMITTED LIVE TO COMMAND CENTER!",
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -227,6 +240,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     child: Column(
                       children: [
                         _buildChannelsCard(),
+                        const SizedBox(height: 14),
+                        _buildDtnMeshCard(),
                         const SizedBox(height: 18),
                         _buildCategorySection(),
                         const SizedBox(height: 16),
@@ -357,6 +372,290 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: _channels.map((c) => _ChannelIndicator(channel: c)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDtnMeshCard() {
+    return Bevel(
+      radius: 10,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: AppColors.ledOn,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  const Text(
+                    "DTN P2P MESH // DATA MULE",
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.amber,
+                      fontFamily: 'Courier',
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: NearbyMeshService.isMeshActiveNotifier,
+                builder: (context, isActive, _) {
+                  return Text(
+                    isActive ? "RADIO: BLE/P2P ON" : "RADIO: STANDBY",
+                    style: TextStyle(
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w700,
+                      color: isActive ? AppColors.olive : AppColors.textMuted,
+                      fontFamily: 'Courier',
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Bevel(
+                  inset: true,
+                  fill: AppColors.panel,
+                  radius: 8,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "PEERS IN RANGE",
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textMuted,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      ValueListenableBuilder<int>(
+                        valueListenable: NearbyMeshService.peerCountNotifier,
+                        builder: (context, peers, _) {
+                          return Row(
+                            children: [
+                              Icon(
+                                Icons.bluetooth_audio_rounded,
+                                size: 14,
+                                color: peers > 0 ? AppColors.olive : AppColors.textMuted,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                "$peers PEER${peers == 1 ? '' : 'S'}",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: peers > 0 ? AppColors.textPrimary : AppColors.textMuted,
+                                  fontFamily: 'Courier',
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Bevel(
+                  inset: true,
+                  fill: AppColors.panel,
+                  radius: 8,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "MULE PACKET QUEUE",
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textMuted,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      ValueListenableBuilder<int>(
+                        valueListenable: DTNBundleStorageService.pendingCountNotifier,
+                        builder: (context, pending, _) {
+                          return Row(
+                            children: [
+                              Icon(
+                                Icons.inventory_2_outlined,
+                                size: 14,
+                                color: pending > 0 ? AppColors.amber : AppColors.olive,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                "$pending BUFFERED",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: pending > 0 ? AppColors.amber : AppColors.textPrimary,
+                                  fontFamily: 'Courier',
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ValueListenableBuilder<String>(
+            valueListenable: NearbyMeshService.lastEventNotifier,
+            builder: (context, event, _) {
+              return Text(
+                "> $event",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 9,
+                  fontFamily: 'Courier',
+                  fontWeight: FontWeight.w600,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    HapticFeedback.lightImpact();
+                    final count = await DTNSyncService.syncPendingBundles();
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: AppColors.panel,
+                        content: Text(
+                          count > 0
+                              ? "Uploaded $count packet(s) to MeshResQ Cloud!"
+                              : "No pending packets or cloud unreachable.",
+                          style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  child: Bevel(
+                    fill: AppColors.panelRaised,
+                    radius: 6,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: const Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.cloud_upload_outlined, size: 13, color: AppColors.olive),
+                          SizedBox(width: 6),
+                          Text(
+                            "SYNC TO CLOUD",
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    HapticFeedback.lightImpact();
+                    // Simulate receiving an SOS from another victim over Bluetooth
+                    final demoSos = {
+                      "incident_uuid": "SOS-DEMO-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}",
+                      "victim_name": "Kavitha M (Simulated Peer)",
+                      "phone": "+91 94440 12345",
+                      "blood_group": "B+",
+                      "medical_notes": "Trapped in flood waters near Nanmangalam lake, no cell signal.",
+                      "category": "Trapped / Lost",
+                      "priority": "CRITICAL",
+                      "latitude": 12.9280,
+                      "longitude": 80.1780,
+                      "altitude": 22.0,
+                      "channel": "MESH-BLE-RELAY",
+                      "hop_count": 1,
+                      "hop_path": [
+                        {"node_id": "NODE-PEER-DEMO-A1", "type": "MOBILE_BLE_ORIGIN", "timestamp": "Relayed"},
+                      ],
+                      "battery_level": 45,
+                      "voice_transcription": "எங்களை காப்பாற்றுங்கள், தண்ணீர் மட்டம் உயர்ந்து வருகிறது!",
+                      "detected_language": "Tamil (தமிழ்)"
+                    };
+                    await NearbyMeshService.simulatePeerRelay(demoSos);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        backgroundColor: AppColors.panel,
+                        content: Text(
+                          "P2P SIMULATION: Ingested peer SOS over Bluetooth & triggered Cloud Uplink!",
+                          style: TextStyle(color: AppColors.amber, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  },
+                  child: Bevel(
+                    fill: AppColors.panelRaised,
+                    radius: 6,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: const Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.hub_outlined, size: 13, color: AppColors.amber),
+                          SizedBox(width: 6),
+                          Text(
+                            "TEST P2P MULE",
+                            style: TextStyle(
+                              color: AppColors.amber,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
