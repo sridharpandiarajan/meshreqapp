@@ -136,7 +136,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                                   ),
                                   children: [
                                     TextSpan(text: "Mesh", style: TextStyle(color: AppColors.textPrimary)),
-                                    TextSpan(text: "ResQ", style: TextStyle(color: AppColors.amber)),
+                                    TextSpan(text: "ReQ", style: TextStyle(color: AppColors.amber)),
                                   ],
                                 ),
                               ),

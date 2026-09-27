@@ -138,7 +138,7 @@ class _LoginPageState extends State<LoginPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: const [
                           Text(
-                            "MESHRESQ // TACTICAL NODE AUTH",
+                            "MESHREQ // TACTICAL NODE AUTH",
                             style: TextStyle(
                               color: AppColors.amber,
                               fontSize: 12,

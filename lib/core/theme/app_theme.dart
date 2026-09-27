@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_color.dart';
 
-/// MeshResQ ships one designed theme -- the rugged-hardware dark palette
+/// MeshReQ ships one designed theme -- the rugged-hardware dark palette
 /// used across every screen. There's no light variant yet, so this is
 /// exposed only as `darkTheme` and the app is pinned to `ThemeMode.dark`
 /// in main.dart rather than following the system setting, which would

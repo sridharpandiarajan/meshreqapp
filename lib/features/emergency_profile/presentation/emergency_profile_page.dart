@@ -163,7 +163,7 @@ class _EmergencyProfilePageState extends State<EmergencyProfilePage> {
                         radius: 8,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         child: const Text(
-                          "MESHRESQ // VICTIM IDENTIFICATION",
+                          "MESHREQ // VICTIM IDENTIFICATION",
                           style: TextStyle(
                             color: AppColors.amber,
                             fontSize: 10.5,

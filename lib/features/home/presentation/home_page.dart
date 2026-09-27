@@ -9,7 +9,9 @@ import '../../../core/services/nearby_mesh_service.dart';
 import '../../../core/services/dtn_sync_service.dart';
 import '../../../core/theme/app_color.dart';
 import '../../../core/theme/bevel.dart';
+import '../../../core/services/lora_locator_service.dart';
 import '../../profile/presentation/profile_page.dart';
+import '../../lora_radar/presentation/lora_radar_page.dart';
 
 class _EmergencyCategory {
   final String label;
@@ -117,6 +119,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
     _loadLocalData();
     NearbyMeshService.startMesh();
+    LoraLocatorService.init().then((_) {
+      LoraLocatorService.syncStationsFromCloud();
+    });
   }
 
   @override
@@ -241,6 +246,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       children: [
                         _buildChannelsCard(),
                         const SizedBox(height: 14),
+                        _buildLoraRadarAccessCard(),
+                        const SizedBox(height: 14),
                         _buildDtnMeshCard(),
                         const SizedBox(height: 18),
                         _buildCategorySection(),
@@ -279,7 +286,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "MESHRESQ // CONSOLE",
+                    "MESHREQ // CONSOLE",
                     style: TextStyle(
                       color: AppColors.amber,
                       fontSize: 10.5,
@@ -374,6 +381,141 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             children: _channels.map((c) => _ChannelIndicator(channel: c)).toList(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLoraRadarAccessCard() {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const LoraRadarPage()),
+        );
+      },
+      child: Bevel(
+        radius: 10,
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: AppColors.ledOn,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    const Text(
+                      "OFFLINE LORA RADAR // 2KM BEACON",
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.amber,
+                        fontFamily: 'Courier',
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.olive.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: AppColors.olive.withValues(alpha: 0.5)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.explore_outlined, color: AppColors.olive, size: 11),
+                      SizedBox(width: 4),
+                      Text(
+                        "OPEN RADAR",
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.olive,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.panelRaised,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.hairline),
+                  ),
+                  child: const Icon(
+                    Icons.radar,
+                    color: AppColors.olive,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ValueListenableBuilder<int>(
+                        valueListenable: LoraLocatorService.towersInTwoKmNotifier,
+                        builder: (context, count, _) {
+                          return Text(
+                            count > 0
+                                ? "$count LORA TOWER${count == 1 ? '' : 'S'} WITHIN 2KM"
+                                : "SCANNING FOR LORA TOWERS (2KM)",
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.3,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 2),
+                      ValueListenableBuilder<int>(
+                        valueListenable: LoraLocatorService.cachedTowersCountNotifier,
+                        builder: (context, total, _) {
+                          return Text(
+                            "Offline directional navigation active • $total regional repeaters cached",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 9.5,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right,
+                  color: AppColors.textMuted,
+                  size: 18,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -558,7 +700,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         backgroundColor: AppColors.panel,
                         content: Text(
                           count > 0
-                              ? "Uploaded $count packet(s) to MeshResQ Cloud!"
+                              ? "Uploaded $count packet(s) to MeshReQ Cloud!"
                               : "No pending packets or cloud unreachable.",
                           style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
                         ),

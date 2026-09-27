@@ -55,7 +55,7 @@ class _PermissionPageState extends State<PermissionPage> {
                 radius: 8,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 child: const Text(
-                  "MESHRESQ // ACCESS MANIFEST",
+                  "MESHREQ // ACCESS MANIFEST",
                   style: TextStyle(
                     color: AppColors.amber,
                     fontSize: 10.5,
@@ -78,7 +78,7 @@ class _PermissionPageState extends State<PermissionPage> {
               ),
               const SizedBox(height: 10),
               const Text(
-                "MeshResQ works without an account. To find nearby "
+                "MeshReQ works without an account. To find nearby "
                     "peer nodes and send SOS signals offline, it needs "
                     "the local access listed below.",
                 style: TextStyle(

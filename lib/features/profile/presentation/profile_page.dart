@@ -56,7 +56,7 @@ class _ProfilePageState extends State<ProfilePage> {
       _iceContact = (savedIce != null && savedIce.isNotEmpty) ? savedIce : 'No ICE contact specified';
       _email = FirebaseAuthService.currentUserEmail.isNotEmpty
           ? FirebaseAuthService.currentUserEmail
-          : 'offline-node@meshresq.local';
+          : 'offline-node@meshreq.local';
       _nodeUuid = DeviceIdentityService.getOrCreateDeviceUUID();
       _serverUrl = MeshApiService.getBaseUrl();
       _isEmergencyBypass = FirebaseAuthService.isEmergencyBypass;
@@ -84,7 +84,7 @@ class _ProfilePageState extends State<ProfilePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Set the IP / URL of the MeshResQ FastAPI backend server:",
+              "Set the IP / URL of the MeshReQ FastAPI backend server:",
               style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
             ),
             const SizedBox(height: 12),

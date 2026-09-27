@@ -14,16 +14,16 @@ void main() async {
   await DTNBundleStorageService.init();
   await FirebaseAuthService.init();
   DTNSyncService.startPeriodicSync();
-  runApp(const MeshResQApp());
+  runApp(const MeshReQApp());
 }
 
-class MeshResQApp extends StatelessWidget {
-  const MeshResQApp({super.key});
+class MeshReQApp extends StatelessWidget {
+  const MeshReQApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MeshResQ',
+      title: 'MeshReQ',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       // No light theme exists yet -- every screen is hand-themed for

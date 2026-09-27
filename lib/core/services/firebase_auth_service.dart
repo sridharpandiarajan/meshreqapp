@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'device_identity_service.dart';
 
-/// Hybrid Offline-First Firebase Authentication Service for MeshResQ.
+/// Hybrid Offline-First Firebase Authentication Service for MeshReQ.
 /// 
 /// In emergency/disaster scenarios, connectivity may be completely offline.
 /// This service allows full Firebase cloud auth when online, while persisting 
@@ -159,7 +159,7 @@ class FirebaseAuthService {
   static Future<void> emergencyBypass() async {
     await _box.put('is_authenticated', true);
     await _box.put('is_emergency_bypass', true);
-    await _box.put('email', 'emergency-guest@meshresq.local');
+    await _box.put('email', 'emergency-guest@meshreq.local');
     await _box.put('display_name', 'Emergency Citizen Beacon');
     await _box.put('uid', DeviceIdentityService.getOrCreateDeviceUUID());
   }

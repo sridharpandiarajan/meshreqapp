@@ -56,7 +56,7 @@ class MeshApiService {
 
     final phone = box?.get('phone') as String? ?? '+91 98401 55667';
     final bloodGroup = box?.get('blood_group') as String? ?? 'O+';
-    final medicalNotes = box?.get('medical_notes') as String? ?? 'Emergency assistance requested via MeshResQ mobile app.';
+    final medicalNotes = box?.get('medical_notes') as String? ?? 'Emergency assistance requested via MeshReQ mobile app.';
     final iceContact = box?.get('ice_contact') as String? ?? 'Family: +91 98401 99887';
     final deviceUuid = DeviceIdentityService.getOrCreateDeviceUUID();
 
@@ -101,7 +101,7 @@ class MeshApiService {
 
     // 3. Fallback: Network unreachable -> Relay immediately to nearby peers via Bluetooth/Nearby
     final peerRelayCount = await NearbyMeshService.broadcastPacket(payload);
-    debugPrint("[MeshResQ] Offline mode: Broadcasted SOS packet to $peerRelayCount nearby peer(s).");
+    debugPrint("[MeshReQ] Offline mode: Broadcasted SOS packet to $peerRelayCount nearby peer(s).");
 
     return {
       "success": true,
