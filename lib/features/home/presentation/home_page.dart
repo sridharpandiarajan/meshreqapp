@@ -16,6 +16,7 @@ import '../../../core/theme/bevel.dart';
 import '../../../core/services/lora_locator_service.dart';
 import '../../profile/presentation/profile_page.dart';
 import '../../lora_radar/presentation/lora_radar_page.dart';
+import '../../notifications/presentation/broadcasts_page.dart';
 
 class _EmergencyCategory {
   final String label;
@@ -356,6 +357,32 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
           const SizedBox(width: 10),
           GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BroadcastsPage()),
+            ),
+            child: Bevel(
+              radius: 8,
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+              child: const Column(
+                children: [
+                  Icon(Icons.notifications_active_outlined, color: AppColors.olive, size: 16),
+                  SizedBox(height: 3),
+                  Text(
+                    "ALERTS",
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
             onTap: () async {
               await Navigator.push(
                 context,
@@ -430,39 +457,40 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: AppColors.ledOn,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 7),
-                    const Text(
-                      "OFFLINE LORA RADAR // 2KM BEACON",
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.amber,
-                        fontFamily: 'Courier',
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                  ],
-                ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                    color: AppColors.ledOn,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                const Expanded(
+                  child: Text(
+                    "OFFLINE LORA RADAR // 2KM",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.amber,
+                      fontFamily: 'Courier',
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
                     color: AppColors.olive.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: AppColors.olive.withValues(alpha: 0.5)),
                   ),
                   child: const Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.explore_outlined, color: AppColors.olive, size: 11),
                       SizedBox(width: 4),
@@ -565,7 +593,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     width: 7,
                     height: 7,
                     decoration: const BoxDecoration(
-                      color: AppColors.ledOn,
+                      color: AppColors.amber,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -585,13 +613,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ValueListenableBuilder<bool>(
                 valueListenable: NearbyMeshService.isMeshActiveNotifier,
                 builder: (context, isActive, _) {
-                  return Text(
-                    isActive ? "RADIO: BLE/P2P ON" : "RADIO: STANDBY",
-                    style: TextStyle(
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w700,
-                      color: isActive ? AppColors.olive : AppColors.textMuted,
-                      fontFamily: 'Courier',
+                  return ValueListenableBuilder<int>(
+                    valueListenable: NearbyMeshService.peerCountNotifier,
+                    builder: (context, peers, _) => Text(
+                      peers > 0
+                          ? "$peers CONNECTED"
+                          : (isActive ? "SEARCHING" : "NOT ACTIVE"),
+                      style: TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w700,
+                        color: peers > 0
+                            ? AppColors.olive
+                            : (isActive ? AppColors.amber : AppColors.textMuted),
+                        fontFamily: 'Courier',
+                      ),
                     ),
                   );
                 },
@@ -599,6 +634,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ],
           ),
           const SizedBox(height: 12),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              "Keep both apps open nearby. Uses Android Nearby Connections (Bluetooth / Wi-Fi).",
+              style: TextStyle(color: AppColors.textMuted, fontSize: 10, height: 1.3),
+            ),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -611,7 +654,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        "PEERS IN RANGE",
+                        "CONNECTED PHONES",
                         style: TextStyle(
                           fontSize: 8,
                           fontWeight: FontWeight.w700,
@@ -626,7 +669,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           return Row(
                             children: [
                               Icon(
-                                Icons.bluetooth_audio_rounded,
+                                Icons.hub_rounded,
                                 size: 14,
                                 color: peers > 0 ? AppColors.olive : AppColors.textMuted,
                               ),
@@ -703,12 +746,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             valueListenable: NearbyMeshService.lastEventNotifier,
             builder: (context, event, _) {
               return Text(
-                "> $event",
-                maxLines: 1,
+                event,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: AppColors.textMuted,
-                  fontSize: 9,
+                  fontSize: 10,
                   fontFamily: 'Courier',
                   fontWeight: FontWeight.w600,
                 ),
@@ -716,6 +759,40 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             },
           ),
           const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () async {
+              HapticFeedback.lightImpact();
+              await NearbyMeshService.stopMesh();
+              final started = await NearbyMeshService.startMesh();
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: AppColors.panel,
+                  content: Text(
+                    started ? "Nearby search restarted." : NearbyMeshService.lastEventNotifier.value,
+                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                  ),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            },
+            child: Bevel(
+              fill: AppColors.panelRaised,
+              radius: 6,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: const Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.refresh_rounded, size: 14, color: AppColors.olive),
+                    SizedBox(width: 6),
+                    Text("RETRY NEARBY SEARCH", style: TextStyle(color: AppColors.textPrimary, fontSize: 10, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -767,7 +844,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 child: GestureDetector(
                   onTap: () async {
                     HapticFeedback.lightImpact();
-                    // Simulate receiving an SOS from another victim over Bluetooth
+                    // This action is a local demo, not a real phone-to-phone transfer.
                     final demoSos = {
                       "incident_uuid": "SOS-DEMO-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}",
                       "victim_name": "Kavitha M (Simulated Peer)",
@@ -794,7 +871,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       const SnackBar(
                         backgroundColor: AppColors.panel,
                         content: Text(
-                          "P2P SIMULATION: Ingested peer SOS over Bluetooth & triggered Cloud Uplink!",
+                          "DEMO ONLY: Simulated a peer SOS and cloud upload.",
                           style: TextStyle(color: AppColors.amber, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                         duration: Duration(seconds: 3),

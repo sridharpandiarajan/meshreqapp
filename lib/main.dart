@@ -16,6 +16,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DeviceIdentityService.init();
   await Hive.openBox('emergency_profile_box');
+  await Hive.openBox('broadcasts_cache_box');
   await DTNBundleStorageService.init();
   await FirebaseAuthService.init();
   await FirebasePushService.registerBackgroundHandler();

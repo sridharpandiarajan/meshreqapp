@@ -92,7 +92,7 @@ class _ProfilePageState extends State<ProfilePage> {
               controller: controller,
               style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontFamily: 'Courier'),
               decoration: InputDecoration(
-                hintText: "e.g. http://192.168.1.100:8000",
+                hintText: "https://meshreqadmin.onrender.com",
                 hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                 filled: true,
                 fillColor: AppColors.panelRaised,

@@ -35,16 +35,26 @@ class NearbyMeshService {
         ].request();
 
         debugPrint('[NearbyMesh] Permission statuses: $status');
+        if (status.values.any((permissionStatus) => !permissionStatus.isGranted)) {
+          isMeshActiveNotifier.value = false;
+          lastEventNotifier.value = "Allow nearby-device permissions to connect phones";
+          _isStarting = false;
+          return false;
+        }
+      } else {
+        isMeshActiveNotifier.value = false;
+        lastEventNotifier.value = "Phone-to-phone mesh is currently supported on Android";
+        _isStarting = false;
+        return false;
       }
 
       final deviceId = DeviceIdentityService.getOrCreateDeviceUUID();
       final nickname = "NODE-$deviceId";
 
-      lastEventNotifier.value = "Starting BLE / P2P Mesh...";
+      lastEventNotifier.value = "Starting nearby phone search…";
 
-      if (!kIsWeb && Platform.isAndroid) {
-        // 1. Start Advertising so other phones can discover this node
-        final adStarted = await Nearby().startAdvertising(
+      // 1. Start Advertising so other phones can discover this node
+      final adStarted = await Nearby().startAdvertising(
           nickname,
           meshStrategy,
           serviceId: serviceId,
@@ -58,16 +68,16 @@ class NearbyMeshService {
           onDisconnected: (endpointId) {
             _handleDisconnected(endpointId);
           },
-        );
+      );
 
-        // 2. Start Discovery so this node can discover nearby phones
-        final disStarted = await Nearby().startDiscovery(
+      // 2. Start Discovery so this node can discover nearby phones
+      final disStarted = await Nearby().startDiscovery(
           nickname,
           meshStrategy,
           serviceId: serviceId,
           onEndpointFound: (endpointId, endpointName, serviceId) async {
             debugPrint('[NearbyMesh] Discovered peer endpoint $endpointId ($endpointName)');
-            lastEventNotifier.value = "Discovered peer $endpointName";
+            lastEventNotifier.value = "Found $endpointName. Connecting…";
             // Auto-connect to discoverable peer
             try {
               await Nearby().requestConnection(
@@ -85,18 +95,26 @@ class NearbyMeshService {
               );
             } catch (e) {
               debugPrint('[NearbyMesh] Request connection error: $e');
+              lastEventNotifier.value = "Found a phone but could not connect. Keep both apps open.";
             }
           },
           onEndpointLost: (endpointId) {
             debugPrint('[NearbyMesh] Endpoint lost: $endpointId');
           },
-        );
+      );
 
-        debugPrint('[NearbyMesh] Mesh started. Ad: $adStarted, Dis: $disStarted');
+      debugPrint('[NearbyMesh] Mesh started. Ad: $adStarted, Dis: $disStarted');
+      if (!adStarted || !disStarted) {
+        await Nearby().stopAdvertising();
+        await Nearby().stopDiscovery();
+        isMeshActiveNotifier.value = false;
+        lastEventNotifier.value = "Could not start nearby search. Tap retry.";
+        _isStarting = false;
+        return false;
       }
 
       isMeshActiveNotifier.value = true;
-      lastEventNotifier.value = "P2P Cluster Active (Listening & Beacons)";
+      lastEventNotifier.value = "Searching for nearby phones. Keep this screen open.";
       _isStarting = false;
       return true;
     } catch (e) {
@@ -131,6 +149,9 @@ class NearbyMeshService {
     } else {
       _connectedEndpoints.remove(endpointId);
       peerCountNotifier.value = _connectedEndpoints.length;
+      lastEventNotifier.value = _connectedEndpoints.isEmpty
+          ? "Connection failed. Keep both phones open and retry nearby search."
+          : "${_connectedEndpoints.length} phone(s) connected";
       debugPrint('[NearbyMesh] Connection to $endpointId failed with status: $status');
     }
   }
@@ -138,7 +159,9 @@ class NearbyMeshService {
   static void _handleDisconnected(String endpointId) {
     _connectedEndpoints.remove(endpointId);
     peerCountNotifier.value = _connectedEndpoints.length;
-    lastEventNotifier.value = "Peer disconnected ($endpointId)";
+    lastEventNotifier.value = _connectedEndpoints.isEmpty && isMeshActiveNotifier.value
+        ? "Phone disconnected. Searching for nearby phones."
+        : "Phone disconnected ($endpointId)";
     debugPrint('[NearbyMesh] Peer disconnected: $endpointId. Remaining peers: ${_connectedEndpoints.length}');
   }
 

@@ -191,25 +191,39 @@ class _LoraRadarPageState extends State<LoraRadarPage> with SingleTickerProvider
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        "LORA RADAR // 2KM RANGEFINDER",
-                        style: TextStyle(
-                          color: AppColors.amber,
-                          fontSize: 10,
-                          fontFamily: 'Courier',
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.4,
+                      const Expanded(
+                        child: Text(
+                          "LORA RADAR // 2KM RANGE",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.amber,
+                            fontSize: 10,
+                            fontFamily: 'Courier',
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.1,
+                          ),
                         ),
                       ),
-                      Text(
-                        "$inRangeCount IN 2KM RANGE",
-                        style: TextStyle(
-                          color: inRangeCount > 0 ? AppColors.ledOn : AppColors.amber,
-                          fontSize: 9,
-                          fontFamily: 'Courier',
-                          fontWeight: FontWeight.bold,
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: (inRangeCount > 0 ? AppColors.ledOn : AppColors.amber).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: (inRangeCount > 0 ? AppColors.ledOn : AppColors.amber).withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Text(
+                          "$inRangeCount IN RANGE",
+                          style: TextStyle(
+                            color: inRangeCount > 0 ? AppColors.ledOn : AppColors.amber,
+                            fontSize: 8.5,
+                            fontFamily: 'Courier',
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
