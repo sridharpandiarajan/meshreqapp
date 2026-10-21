@@ -19,8 +19,9 @@ class MainActivity : FlutterActivity() {
                 description = "Urgent alerts from MeshReQ command"
                 enableVibration(true)
             }
-            getSystemService(Context.NOTIFICATION_SERVICE, NotificationManager::class.java)
-                .createNotificationChannel(channel)
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
         }
     }
 }
