@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/services/firebase_auth_service.dart';
+import '../../../core/services/mesh_api_service.dart';
 import '../../../core/theme/app_color.dart';
 import '../../../core/theme/bevel.dart';
 import '../../permissions/presentation/permission_page.dart';
@@ -54,6 +56,9 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted) return;
 
     if (result['success'] == true) {
+      unawaited(MeshApiService.recordAccountActivity(
+        _isRegistering ? 'account_created' : 'signed_in',
+      ));
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const PermissionPage()),

@@ -117,6 +117,9 @@ class MeshApiService {
 
   /// Uplinks a single bundle payload to the FastAPI server with fallback endpoints
   static Future<Map<String, dynamic>> uploadBundle(Map<String, dynamic> payload) async {
+    final token = await FirebaseAuthService.currentIdToken();
+    final headers = <String, String>{"Content-Type": "application/json"};
+    if (token != null) headers["Authorization"] = "Bearer $token";
     final candidateUrls = [
       getBaseUrl(),
       "http://127.0.0.1:8000",
@@ -127,7 +130,7 @@ class MeshApiService {
       try {
         final response = await http.post(
           Uri.parse("$baseUrl/api/v1/incidents"),
-          headers: {"Content-Type": "application/json"},
+          headers: headers,
           body: jsonEncode(payload),
         // Render's free instance may take a while to wake after inactivity.
         ).timeout(const Duration(seconds: 60));
@@ -140,5 +143,24 @@ class MeshApiService {
     }
 
     return {"success": false, "offline": true, "error": "All candidate endpoints unreachable"};
+  }
+
+  /// Best-effort activity history sync. Never blocks the user from signing in
+  /// when the backend is offline or the device is in emergency bypass mode.
+  static Future<void> recordAccountActivity(String eventType) async {
+    final token = await FirebaseAuthService.currentIdToken();
+    if (token == null) return;
+    try {
+      await http.post(
+        Uri.parse("${getBaseUrl()}/api/v1/activity"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({"event_type": eventType}),
+      ).timeout(const Duration(seconds: 8));
+    } catch (e) {
+      debugPrint("Account activity will not sync right now: $e");
+    }
   }
 }

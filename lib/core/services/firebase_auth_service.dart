@@ -66,6 +66,20 @@ class FirebaseAuthService {
     return _box.get('uid', defaultValue: DeviceIdentityService.getOrCreateDeviceUUID());
   }
 
+  /// Firebase ID token used to associate online activity and SOS uploads with
+  /// the signed-in account. Offline/emergency sessions intentionally return null.
+  static Future<String?> currentIdToken() async {
+    if (!_firebaseInitialized) return null;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+    try {
+      return await user.getIdToken();
+    } catch (e) {
+      debugPrint("Could not refresh Firebase ID token: $e");
+      return null;
+    }
+  }
+
   /// Sign In with Email and Password
   static Future<Map<String, dynamic>> signInWithEmail({
     required String email,
