@@ -70,7 +70,9 @@ class NearbyMeshService {
       lastEventNotifier.value = "Starting nearby phone search…";
 
       // 1. Start Advertising so other phones can discover this node
-      final adStarted = await Nearby().startAdvertising(
+      bool adStarted = false;
+      try {
+        adStarted = await Nearby().startAdvertising(
           nickname,
           meshStrategy,
           serviceId: serviceId,
@@ -84,10 +86,15 @@ class NearbyMeshService {
           onDisconnected: (endpointId) {
             _handleDisconnected(endpointId);
           },
-      );
+        );
+      } catch (e) {
+        debugPrint('[NearbyMesh] startAdvertising error: $e');
+      }
 
       // 2. Start Discovery so this node can discover nearby phones
-      final disStarted = await Nearby().startDiscovery(
+      bool disStarted = false;
+      try {
+        disStarted = await Nearby().startDiscovery(
           nickname,
           meshStrategy,
           serviceId: serviceId,
@@ -127,10 +134,13 @@ class NearbyMeshService {
           onEndpointLost: (endpointId) {
             debugPrint('[NearbyMesh] Endpoint lost: $endpointId');
           },
-      );
+        );
+      } catch (e) {
+        debugPrint('[NearbyMesh] startDiscovery error: $e');
+      }
 
       debugPrint('[NearbyMesh] Mesh started. Ad: $adStarted, Dis: $disStarted');
-      if (!adStarted || !disStarted) {
+      if (!adStarted && !disStarted) {
         await Nearby().stopAdvertising();
         await Nearby().stopDiscovery();
         isMeshActiveNotifier.value = false;

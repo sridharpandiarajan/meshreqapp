@@ -637,7 +637,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           const Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              "Keep both apps open nearby. Uses Android Nearby Connections (Bluetooth / Wi-Fi).",
+              "Keep both apps open nearby. Turn ON Wi-Fi & Bluetooth toggles (no internet/router needed; uses direct phone-to-phone radio).",
               style: TextStyle(color: AppColors.textMuted, fontSize: 10, height: 1.3),
             ),
           ),
