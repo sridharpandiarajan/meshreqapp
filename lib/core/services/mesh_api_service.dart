@@ -133,7 +133,7 @@ class MeshApiService {
           headers: headers,
           body: jsonEncode(payload),
         // Render's free instance may take a while to wake after inactivity.
-        ).timeout(const Duration(seconds: 60));
+        ).timeout(const Duration(seconds: 6));
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           final data = jsonDecode(response.body);

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:nearby_connections/nearby_connections.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'device_identity_service.dart';
@@ -25,22 +26,37 @@ class NearbyMeshService {
 
     try {
       if (!kIsWeb && Platform.isAndroid) {
-        // Verify permissions
-        final status = await [
-          Permission.locationWhenInUse,
-          Permission.bluetoothScan,
-          Permission.bluetoothAdvertise,
-          Permission.bluetoothConnect,
-          Permission.nearbyWifiDevices,
-        ].request();
-
-        debugPrint('[NearbyMesh] Permission statuses: $status');
-        if (status.values.any((permissionStatus) => !permissionStatus.isGranted)) {
+        // 1. Location permission is required for radio scanning across all Android versions
+        final locStatus = await Permission.locationWhenInUse.request();
+        if (!locStatus.isGranted && !(await Permission.location.isGranted)) {
           isMeshActiveNotifier.value = false;
-          lastEventNotifier.value = "Allow nearby-device permissions to connect phones";
+          lastEventNotifier.value = "Allow Location permission to connect phones";
           _isStarting = false;
           return false;
         }
+
+        // 2. Request Android 12+ Bluetooth permissions (safe on older versions)
+        try {
+          await [
+            Permission.bluetoothScan,
+            Permission.bluetoothAdvertise,
+            Permission.bluetoothConnect,
+          ].request();
+        } catch (_) {}
+
+        // 3. Request Android 13+ nearby wifi permission (safe on older versions)
+        try {
+          await Permission.nearbyWifiDevices.request();
+        } catch (_) {}
+
+        // 4. Check if device-level Location (GPS) toggle is turned on
+        try {
+          final isGpsOn = await Geolocator.isLocationServiceEnabled();
+          if (!isGpsOn) {
+            lastEventNotifier.value = "Turn ON Location (GPS) in phone settings";
+            debugPrint('[NearbyMesh] Warning: Location service is OFF in Android quick settings.');
+          }
+        } catch (_) {}
       } else {
         isMeshActiveNotifier.value = false;
         lastEventNotifier.value = "Phone-to-phone mesh is currently supported on Android";
@@ -78,7 +94,17 @@ class NearbyMeshService {
           onEndpointFound: (endpointId, endpointName, serviceId) async {
             debugPrint('[NearbyMesh] Discovered peer endpoint $endpointId ($endpointName)');
             lastEventNotifier.value = "Found $endpointName. Connecting…";
-            // Auto-connect to discoverable peer
+
+            // Deterministic tie-breaker:
+            // Compare identifiers to decide which device calls requestConnection.
+            // If both devices simultaneously call requestConnection, Google Nearby Connections
+            // throws a collision error. One device initiates, the other yields and accepts.
+            final shouldInitiate = nickname.compareTo(endpointName) > 0;
+            if (!shouldInitiate) {
+              debugPrint('[NearbyMesh] Tie-breaker yielded: waiting for $endpointName to request connection.');
+              return;
+            }
+
             try {
               await Nearby().requestConnection(
                 nickname,
@@ -95,7 +121,7 @@ class NearbyMeshService {
               );
             } catch (e) {
               debugPrint('[NearbyMesh] Request connection error: $e');
-              lastEventNotifier.value = "Found a phone but could not connect. Keep both apps open.";
+              lastEventNotifier.value = "Connecting to $endpointName failed. Retrying…";
             }
           },
           onEndpointLost: (endpointId) {
@@ -108,7 +134,7 @@ class NearbyMeshService {
         await Nearby().stopAdvertising();
         await Nearby().stopDiscovery();
         isMeshActiveNotifier.value = false;
-        lastEventNotifier.value = "Could not start nearby search. Tap retry.";
+        lastEventNotifier.value = "Turn ON Wi-Fi, Bluetooth & Location in settings";
         _isStarting = false;
         return false;
       }
