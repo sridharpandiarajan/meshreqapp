@@ -74,6 +74,62 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     "Wildlife Threat": "கண்ணாடி விரியன் பாம்பு கடித்துவிட்டது, விஷம் பரவி கை வீங்கியுள்ளது, அவசர உதவி!",
   };
 
+  
+  Widget _buildRadioChip(String label, bool isOk, String status) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.panel,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isOk ? AppColors.olive.withValues(alpha: 0.4) : AppColors.amber.withValues(alpha: 0.5),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 7.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+                fontFamily: 'Courier',
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: isOk ? AppColors.olive : AppColors.amber,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  status,
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    color: isOk ? AppColors.olive : AppColors.amber,
+                    fontFamily: 'Courier',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _toggleVoiceRecording() {
     HapticFeedback.selectionClick();
     if (_isRecordingVoice) {
@@ -634,12 +690,65 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ],
           ),
           const SizedBox(height: 12),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              "Keep both apps open nearby. Turn ON Wi-Fi & Bluetooth toggles (no internet/router needed; uses direct phone-to-phone radio).",
-              style: TextStyle(color: AppColors.textMuted, fontSize: 10, height: 1.3),
-            ),
+          // Radio status check badges
+          ValueListenableBuilder<bool>(
+            valueListenable: NearbyMeshService.isBluetoothOnNotifier,
+            builder: (context, btOn, _) {
+              return ValueListenableBuilder<bool>(
+                valueListenable: NearbyMeshService.isLocationOnNotifier,
+                builder: (context, gpsOn, _) {
+                  final allRadiosOk = btOn && gpsOn;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _buildRadioChip("WI-FI DIRECT", true, "READY"),
+                          const SizedBox(width: 5),
+                          _buildRadioChip("BLUETOOTH", btOn, btOn ? "ON" : "OFF"),
+                          const SizedBox(width: 5),
+                          _buildRadioChip("GPS / LOC", gpsOn, gpsOn ? "ON" : "OFF"),
+                        ],
+                      ),
+                      if (!allRadiosOk) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.amber.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppColors.amber.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, size: 14, color: AppColors.amber),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  !btOn
+                                      ? "Bluetooth is OFF. Turn ON Bluetooth to discover peers."
+                                      : "Location (GPS) is OFF. Turn ON Location in phone settings.",
+                                  style: const TextStyle(
+                                    color: AppColors.amber,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 6),
+                      const Text(
+                        "P2P REQUIRES: 1) Wi-Fi toggle ON (no router needed), 2) Bluetooth ON, 3) Location ON.",
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 8.5, height: 1.25),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
           ),
           const SizedBox(height: 10),
           Row(
@@ -762,6 +871,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           GestureDetector(
             onTap: () async {
               HapticFeedback.lightImpact();
+              await NearbyMeshService.checkRadios();
               await NearbyMeshService.stopMesh();
               final started = await NearbyMeshService.startMesh();
               if (!mounted) return;

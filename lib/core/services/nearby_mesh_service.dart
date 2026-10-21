@@ -9,68 +9,110 @@ import 'dtn_bundle_storage_service.dart';
 import 'dtn_sync_service.dart';
 
 class NearbyMeshService {
-  static const String serviceId = "org.meshresq.dtn.mesh";
+  /// Matches application ID in android/app/build.gradle.kts
+  static const String serviceId = "com.meshresq.meshresq";
   static final Strategy meshStrategy = Strategy.P2P_CLUSTER;
 
   static final ValueNotifier<bool> isMeshActiveNotifier = ValueNotifier<bool>(false);
   static final ValueNotifier<int> peerCountNotifier = ValueNotifier<int>(0);
-  static final ValueNotifier<String> lastEventNotifier = ValueNotifier<String>("Mesh Offline");
+  static final ValueNotifier<String> lastEventNotifier = ValueNotifier<String>("Mesh Initializing…");
+  static final ValueNotifier<bool> isBluetoothOnNotifier = ValueNotifier<bool>(true);
+  static final ValueNotifier<bool> isLocationOnNotifier = ValueNotifier<bool>(true);
 
   static final Set<String> _connectedEndpoints = {};
+  static final Set<String> _connectingEndpoints = {};
   static bool _isStarting = false;
+
+  /// Checks device radios and updates notifiers
+  static Future<void> checkRadios() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    try {
+      final btOn = await Permission.bluetooth.serviceStatus.isEnabled;
+      isBluetoothOnNotifier.value = btOn;
+    } catch (_) {}
+
+    try {
+      final gpsOn = await Geolocator.isLocationServiceEnabled();
+      isLocationOnNotifier.value = gpsOn;
+    } catch (_) {}
+  }
 
   /// Starts dual-mode advertising & discovery for autonomous peer mesh relay
   static Future<bool> startMesh() async {
-    if (_isStarting || isMeshActiveNotifier.value) return true;
+    if (_isStarting) return true;
     _isStarting = true;
 
     try {
       if (!kIsWeb && Platform.isAndroid) {
-        // 1. Location permission is required for radio scanning across all Android versions
-        final locStatus = await Permission.locationWhenInUse.request();
-        if (!locStatus.isGranted && !(await Permission.location.isGranted)) {
-          isMeshActiveNotifier.value = false;
-          lastEventNotifier.value = "Allow Location permission to connect phones";
-          _isStarting = false;
-          return false;
+        // Clear any previous advertising/discovery session to avoid STATUS_ALREADY_ADVERTISING / DISCOVERING
+        try {
+          await Nearby().stopAdvertising();
+          await Nearby().stopDiscovery();
+        } catch (_) {}
+
+        // 1. Request Location permissions (essential for BLE and P2P scanning)
+        try {
+          final locStatus = await Permission.locationWhenInUse.status;
+          if (!locStatus.isGranted && !(await Permission.location.isGranted)) {
+            final res = await Permission.locationWhenInUse.request();
+            if (!res.isGranted && !(await Permission.location.isGranted)) {
+              isMeshActiveNotifier.value = false;
+              lastEventNotifier.value = "⚠️ Location permission needed for nearby peer scanning";
+              _isStarting = false;
+              return false;
+            }
+          }
+        } catch (e) {
+          debugPrint('[NearbyMesh] Location permission request error: $e');
         }
 
-        // 2. Request Android 12+ Bluetooth permissions (safe on older versions)
+        // 2. Request Android 12+ Bluetooth permissions
         try {
-          await [
-            Permission.bluetoothScan,
-            Permission.bluetoothAdvertise,
-            Permission.bluetoothConnect,
-          ].request();
-        } catch (_) {}
-
-        // 3. Request Android 13+ nearby wifi permission (safe on older versions)
-        try {
-          await Permission.nearbyWifiDevices.request();
-        } catch (_) {}
-
-        // 4. Check if device-level Location (GPS) toggle is turned on
-        try {
-          final isGpsOn = await Geolocator.isLocationServiceEnabled();
-          if (!isGpsOn) {
-            lastEventNotifier.value = "Turn ON Location (GPS) in phone settings";
-            debugPrint('[NearbyMesh] Warning: Location service is OFF in Android quick settings.');
+          final scanStatus = await Permission.bluetoothScan.status;
+          if (!scanStatus.isGranted) {
+            await [
+              Permission.bluetoothScan,
+              Permission.bluetoothAdvertise,
+              Permission.bluetoothConnect,
+            ].request();
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[NearbyMesh] Bluetooth permissions request error: $e');
+        }
+
+        // 3. Request Android 13+ nearby wifi devices permission
+        try {
+          final wifiNearby = await Permission.nearbyWifiDevices.status;
+          if (!wifiNearby.isGranted) {
+            await Permission.nearbyWifiDevices.request();
+          }
+        } catch (e) {
+          debugPrint('[NearbyMesh] Nearby wifi devices request error: $e');
+        }
+
+        // 4. Check hardware switches
+        await checkRadios();
+        if (!isBluetoothOnNotifier.value) {
+          lastEventNotifier.value = "⚠️ Bluetooth is OFF. Turn ON Bluetooth to discover peers.";
+        } else if (!isLocationOnNotifier.value) {
+          lastEventNotifier.value = "⚠️ Location (GPS) is OFF. Turn ON Location in phone settings.";
+        }
       } else {
         isMeshActiveNotifier.value = false;
-        lastEventNotifier.value = "Phone-to-phone mesh is currently supported on Android";
+        lastEventNotifier.value = "Phone-to-phone mesh is supported on Android devices";
         _isStarting = false;
         return false;
       }
 
       final deviceId = DeviceIdentityService.getOrCreateDeviceUUID();
-      final nickname = "NODE-$deviceId";
+      final shortId = deviceId.length >= 8 ? deviceId.substring(0, 8).toUpperCase() : deviceId.toUpperCase();
+      final nickname = "NODE-$shortId";
 
-      lastEventNotifier.value = "Starting nearby phone search…";
+      lastEventNotifier.value = "Starting nearby peer search…";
 
       // 1. Start Advertising so other phones can discover this node
       bool adStarted = false;
+      String? adError;
       try {
         adStarted = await Nearby().startAdvertising(
           nickname,
@@ -78,6 +120,7 @@ class NearbyMeshService {
           serviceId: serviceId,
           onConnectionInitiated: (endpointId, connectionInfo) async {
             debugPrint('[NearbyMesh] Connection initiated by $endpointId (${connectionInfo.endpointName})');
+            lastEventNotifier.value = "Incoming connection from ${connectionInfo.endpointName}. Accepting…";
             await _handleConnectionInitiated(endpointId);
           },
           onConnectionResult: (endpointId, status) {
@@ -88,35 +131,35 @@ class NearbyMeshService {
           },
         );
       } catch (e) {
+        adError = e.toString();
         debugPrint('[NearbyMesh] startAdvertising error: $e');
       }
 
       // 2. Start Discovery so this node can discover nearby phones
       bool disStarted = false;
+      String? disError;
       try {
         disStarted = await Nearby().startDiscovery(
           nickname,
           meshStrategy,
           serviceId: serviceId,
-          onEndpointFound: (endpointId, endpointName, serviceId) async {
+          onEndpointFound: (endpointId, endpointName, foundServiceId) async {
             debugPrint('[NearbyMesh] Discovered peer endpoint $endpointId ($endpointName)');
             lastEventNotifier.value = "Found $endpointName. Connecting…";
 
-            // Deterministic tie-breaker:
-            // Compare identifiers to decide which device calls requestConnection.
-            // If both devices simultaneously call requestConnection, Google Nearby Connections
-            // throws a collision error. One device initiates, the other yields and accepts.
-            final shouldInitiate = nickname.compareTo(endpointName) > 0;
-            if (!shouldInitiate) {
-              debugPrint('[NearbyMesh] Tie-breaker yielded: waiting for $endpointName to request connection.');
+            if (_connectedEndpoints.contains(endpointId) || _connectingEndpoints.contains(endpointId)) {
+              debugPrint('[NearbyMesh] Already connected or handshaking with $endpointId');
               return;
             }
+
+            _connectingEndpoints.add(endpointId);
 
             try {
               await Nearby().requestConnection(
                 nickname,
                 endpointId,
                 onConnectionInitiated: (id, info) async {
+                  debugPrint('[NearbyMesh] Handshake request initiated to $id (${info.endpointName})');
                   await _handleConnectionInitiated(id);
                 },
                 onConnectionResult: (id, status) {
@@ -127,8 +170,9 @@ class NearbyMeshService {
                 },
               );
             } catch (e) {
+              _connectingEndpoints.remove(endpointId);
               debugPrint('[NearbyMesh] Request connection error: $e');
-              lastEventNotifier.value = "Connecting to $endpointName failed. Retrying…";
+              lastEventNotifier.value = "Connecting to $endpointName error: $e";
             }
           },
           onEndpointLost: (endpointId) {
@@ -136,21 +180,30 @@ class NearbyMeshService {
           },
         );
       } catch (e) {
+        disError = e.toString();
         debugPrint('[NearbyMesh] startDiscovery error: $e');
       }
 
-      debugPrint('[NearbyMesh] Mesh started. Ad: $adStarted, Dis: $disStarted');
+      debugPrint('[NearbyMesh] Mesh started. Ad: $adStarted (err: $adError), Dis: $disStarted (err: $disError)');
+
       if (!adStarted && !disStarted) {
         await Nearby().stopAdvertising();
         await Nearby().stopDiscovery();
         isMeshActiveNotifier.value = false;
-        lastEventNotifier.value = "Turn ON Wi-Fi, Bluetooth & Location in settings";
+        final errText = adError ?? disError ?? "Radios unavailable";
+        lastEventNotifier.value = "⚠️ P2P Failed: Turn ON Wi-Fi toggle & Bluetooth ($errText)";
         _isStarting = false;
         return false;
       }
 
       isMeshActiveNotifier.value = true;
-      lastEventNotifier.value = "Searching for nearby phones. Keep this screen open.";
+      if (adStarted && disStarted) {
+        lastEventNotifier.value = "Searching for nearby peers. Keep Wi-Fi toggle & Bluetooth ON.";
+      } else if (adStarted) {
+        lastEventNotifier.value = "Broadcasting presence. Keep Wi-Fi toggle & Bluetooth ON.";
+      } else {
+        lastEventNotifier.value = "Listening for nearby peers. Keep Wi-Fi toggle & Bluetooth ON.";
+      }
       _isStarting = false;
       return true;
     } catch (e) {
@@ -164,16 +217,21 @@ class NearbyMeshService {
   static Future<void> _handleConnectionInitiated(String endpointId) async {
     debugPrint('[NearbyMesh] Auto-accepting connection from $endpointId');
     if (!kIsWeb && Platform.isAndroid) {
-      await Nearby().acceptConnection(
-        endpointId,
-        onPayLoadRecieved: (id, payload) {
-          _handlePayloadReceived(id, payload);
-        },
-      );
+      try {
+        await Nearby().acceptConnection(
+          endpointId,
+          onPayLoadRecieved: (id, payload) {
+            _handlePayloadReceived(id, payload);
+          },
+        );
+      } catch (e) {
+        debugPrint('[NearbyMesh] Error accepting connection from $endpointId: $e');
+      }
     }
   }
 
   static void _handleConnectionResult(String endpointId, Status status) {
+    _connectingEndpoints.remove(endpointId);
     if (status == Status.CONNECTED) {
       _connectedEndpoints.add(endpointId);
       peerCountNotifier.value = _connectedEndpoints.length;
@@ -186,17 +244,18 @@ class NearbyMeshService {
       _connectedEndpoints.remove(endpointId);
       peerCountNotifier.value = _connectedEndpoints.length;
       lastEventNotifier.value = _connectedEndpoints.isEmpty
-          ? "Connection failed. Keep both phones open and retry nearby search."
+          ? "Peer connection status: ${status.name}. Searching for peers…"
           : "${_connectedEndpoints.length} phone(s) connected";
       debugPrint('[NearbyMesh] Connection to $endpointId failed with status: $status');
     }
   }
 
   static void _handleDisconnected(String endpointId) {
+    _connectingEndpoints.remove(endpointId);
     _connectedEndpoints.remove(endpointId);
     peerCountNotifier.value = _connectedEndpoints.length;
     lastEventNotifier.value = _connectedEndpoints.isEmpty && isMeshActiveNotifier.value
-        ? "Phone disconnected. Searching for nearby phones."
+        ? "Phone disconnected. Searching for nearby peers."
         : "Phone disconnected ($endpointId)";
     debugPrint('[NearbyMesh] Peer disconnected: $endpointId. Remaining peers: ${_connectedEndpoints.length}');
   }
@@ -245,7 +304,7 @@ class NearbyMeshService {
       }
     }
 
-    lastEventNotifier.value = "Relayed to $transmitted peer(s) over Bluetooth";
+    lastEventNotifier.value = "Relayed to $transmitted peer(s) over Bluetooth/Wi-Fi Direct";
     debugPrint('[NearbyMesh] Broadcast packet sent to $transmitted peers.');
     return transmitted;
   }
@@ -285,6 +344,7 @@ class NearbyMeshService {
         await Nearby().stopDiscovery();
         await Nearby().stopAllEndpoints();
       }
+      _connectingEndpoints.clear();
       _connectedEndpoints.clear();
       peerCountNotifier.value = 0;
       isMeshActiveNotifier.value = false;
