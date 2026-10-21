@@ -11,8 +11,8 @@ import 'dtn_bundle_storage_service.dart';
 import 'nearby_mesh_service.dart';
 
 class MeshApiService {
-  static const String _defaultUrl = "http://10.0.2.2:8000"; // Default for Android Emulator
-  static const String _defaultLocalhostUrl = "http://localhost:8000"; // For Windows / Web / Host
+  static const String _defaultUrl = "https://meshreqadmin.onrender.com";
+  static const String _defaultLocalhostUrl = "https://meshreqadmin.onrender.com";
 
   static String getBaseUrl() {
     if (Hive.isBoxOpen('device_identity_box')) {
@@ -129,7 +129,8 @@ class MeshApiService {
           Uri.parse("$baseUrl/api/v1/incidents"),
           headers: {"Content-Type": "application/json"},
           body: jsonEncode(payload),
-        ).timeout(const Duration(seconds: 3));
+        // Render's free instance may take a while to wake after inactivity.
+        ).timeout(const Duration(seconds: 60));
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           final data = jsonDecode(response.body);

@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/services/device_identity_service.dart';
 import '../../../core/services/mesh_api_service.dart';
+import '../../../core/services/live_alerts_service.dart';
+import '../../../core/services/firebase_push_service.dart';
 import '../../../core/services/dtn_bundle_storage_service.dart';
 import '../../../core/services/nearby_mesh_service.dart';
 import '../../../core/services/dtn_sync_service.dart';
@@ -118,6 +122,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     });
 
     _loadLocalData();
+    unawaited(FirebasePushService.instance.start());
     NearbyMeshService.startMesh();
     LoraLocatorService.init().then((_) {
       LoraLocatorService.syncStationsFromCloud();
@@ -320,6 +325,30 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 5),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: LiveAlertsService.instance.isConnected,
+                    builder: (context, connected, _) => Row(
+                      children: [
+                        Icon(
+                          connected ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                          size: 11,
+                          color: connected ? AppColors.olive : AppColors.textMuted,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          connected ? 'LIVE ALERTS CONNECTED' : 'LIVE ALERTS RECONNECTING',
+                          style: TextStyle(
+                            color: connected ? AppColors.olive : AppColors.textMuted,
+                            fontSize: 8.5,
+                            fontFamily: 'Courier',
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.35,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
