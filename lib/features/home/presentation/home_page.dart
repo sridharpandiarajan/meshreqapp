@@ -180,7 +180,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
     _loadLocalData();
     unawaited(FirebasePushService.instance.start());
-    NearbyMeshService.startMesh();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NearbyMeshService.startMesh();
+    });
     LoraLocatorService.init().then((_) {
       LoraLocatorService.syncStationsFromCloud();
     });
@@ -871,8 +873,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           GestureDetector(
             onTap: () async {
               HapticFeedback.lightImpact();
-              await NearbyMeshService.checkRadios();
               await NearbyMeshService.stopMesh();
+              await Future.delayed(const Duration(milliseconds: 300));
+              await NearbyMeshService.checkRadios();
               final started = await NearbyMeshService.startMesh();
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
